@@ -7,10 +7,11 @@ from torchrec.sparse.jagged_tensor import KeyedJaggedTensor
 from torchrec.models.dlrm import DLRM, DLRMTrain
 
 class HackerNewsRecommender:
-    def __init__(self, embedding_dim=64, hidden_layers=(256, 128, 64)):
+    def __init__(self, embedding_dim=32, hidden_layers=(64, 32)):
+        # Reduced model size for CPU usage
         self.embedding_dim = embedding_dim
         self.hidden_layers = hidden_layers
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")  # Force CPU
         self.model = None
         self.word_to_idx = {}  # Vocabulary mapping
         self.next_word_idx = 1  # Start from 1, 0 is for padding
@@ -79,6 +80,11 @@ class HackerNewsRecommender:
         
         # Get embeddings for each article
         article_embeddings = {}
+        
+        # Handle empty dataframe
+        if articles_df.empty:
+            return article_embeddings
+            
         with torch.no_grad():
             sparse_features, dense_features = self._prepare_batch(articles_df)
             # Use the model's first layers to get embeddings
@@ -93,30 +99,51 @@ class HackerNewsRecommender:
     
     def get_recommendations(self, articles_df: pd.DataFrame, liked_ids: List[int], top_n: int = 5) -> List[int]:
         """Get recommendations based on liked articles"""
-        if not liked_ids:
-            # If no likes, return top articles by score
+        if not liked_ids or articles_df.empty:
+            # If no likes or no articles, return top articles by score
+            if articles_df.empty:
+                return []
             return articles_df.sort_values('score', ascending=False).head(top_n)['id'].tolist()
         
         # Get embeddings for all articles
         all_embeddings = self.get_article_embeddings(articles_df)
         
+        # If no embeddings generated, return by score
+        if not all_embeddings:
+            return articles_df.sort_values('score', ascending=False).head(top_n)['id'].tolist()
+        
+        # Filter liked IDs that exist in embeddings
+        valid_liked_ids = [article_id for article_id in liked_ids if article_id in all_embeddings]
+        
+        # If no valid liked IDs, return by score
+        if not valid_liked_ids:
+            return articles_df.sort_values('score', ascending=False).head(top_n)['id'].tolist()
+        
         # Calculate similarity between liked articles and other articles
-        liked_embeddings = np.mean([all_embeddings[article_id] for article_id in liked_ids 
-                                   if article_id in all_embeddings], axis=0)
+        liked_embeddings = np.mean([all_embeddings[article_id] for article_id in valid_liked_ids], axis=0)
         
         # Filter out already liked articles
         candidate_articles = articles_df[~articles_df['id'].isin(liked_ids)]
         
+        # If no candidates, return empty list
+        if candidate_articles.empty:
+            return []
+            
         # Calculate similarities to candidate articles
         similarities = {}
         for _, row in candidate_articles.iterrows():
             article_id = row['id']
             if article_id in all_embeddings:
-                # Cosine similarity
-                similarity = np.dot(liked_embeddings, all_embeddings[article_id]) / (
-                    np.linalg.norm(liked_embeddings) * np.linalg.norm(all_embeddings[article_id])
-                )
-                similarities[article_id] = similarity
+                # Cosine similarity with safe division
+                norm_liked = np.linalg.norm(liked_embeddings)
+                norm_article = np.linalg.norm(all_embeddings[article_id])
+                
+                if norm_liked > 0 and norm_article > 0:
+                    similarity = np.dot(liked_embeddings, all_embeddings[article_id]) / (norm_liked * norm_article)
+                    similarities[article_id] = similarity
+                else:
+                    # Fall back to score-based ranking for this article
+                    similarities[article_id] = row['score'] / 1000.0  # Normalize
         
         # Sort by similarity and return top N
         recommended_ids = sorted(similarities.keys(), key=lambda k: similarities[k], reverse=True)[:top_n]

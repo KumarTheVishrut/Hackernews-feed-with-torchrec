@@ -20,11 +20,14 @@ def get_articles(force_refresh=False):
     current_time = time.time()
     
     # Refresh cache if it's empty, or if it's older than 15 minutes, or if forced
-    if not article_cache or (current_time - last_fetch_time > 900) or force_refresh:
-        article_cache = fetch_top_hn_articles(limit=50, hydrate=True)
+    if not article_cache or (current_time - last_fetch_time > 1000) or force_refresh:
+        article_cache = fetch_top_hn_articles(limit=40, hydrate=True)
         last_fetch_time = current_time
         
     return article_cache
+
+
+# route for fetching articles for hydration in json
 
 @app.route('/api/articles', methods=['GET'])
 def get_all_articles():
@@ -41,6 +44,9 @@ def get_all_articles():
         'count': len(df),
         'articles': df.to_dict('records')
     })
+
+
+# fetching the articles from the endpoint
 
 @app.route('/api/article/<int:article_id>', methods=['GET'])
 def get_article(article_id):
