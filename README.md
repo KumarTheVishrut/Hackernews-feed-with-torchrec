@@ -1,4 +1,4 @@
-# Better Hacker News Feed with TorchRec
+# Better Hacker News Feed with TorchRec 🚀🚀
 
 This is an enhanced Hacker News feed application that uses TorchRec for advanced recommendation capabilities and content hydration for a better reading experience.
 
