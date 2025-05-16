@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  hacker_news_recommender:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"  # Streamlit
+      - "5000:5000"  # Flask API
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped 
