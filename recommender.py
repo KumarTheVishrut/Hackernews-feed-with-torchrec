@@ -11,7 +11,7 @@ class HackerNewsRecommender:
         # Reduced model size for CPU usage
         self.embedding_dim = embedding_dim
         self.hidden_layers = hidden_layers
-        self.device = torch.device("cpu")  # Force CPU
+        self.device = torch.device("cuda")  # Force CPU
         self.model = None
         self.word_to_idx = {}  # Vocabulary mapping
         self.next_word_idx = 1  # Start from 1, 0 is for padding
